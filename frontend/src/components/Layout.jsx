@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Home, Compass, PlusSquare, Package, User } from "lucide-react";
+import { Home, Compass, PlusSquare, MessageCircle, User } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 const NavItem = ({ to, icon: Icon, label, testId }) => (
@@ -42,7 +42,7 @@ export default function Layout() {
                 <NavItem to="/" icon={Home} label="الرئيسية" testId="nav-home" />
                 <NavItem to="/explore" icon={Compass} label="اكتشف" testId="nav-explore" />
                 <NavItem to="/upload" icon={PlusSquare} label="نشر" testId="nav-upload" />
-                <NavItem to="/orders" icon={Package} label="طلباتي" testId="nav-orders" />
+                <NavItem to="/messages" icon={MessageCircle} label="رسائل" testId="nav-messages" />
                 <button
                     data-testid="nav-profile"
                     onClick={goProfile}

@@ -1,0 +1,34 @@
+{
+  "summary": "Backend testing of 5 new feature families (search, reviews, notifications, messages, earnings + 10% platform fee). 21/22 checks passed. Only 1 real bug: creating a comment on someone else's video does NOT generate a notification (missing create_notification call in POST /videos/{video_id}/comments).",
+  "tested_scope": ["backend", "integration"],
+  "passed": [
+    "GET /api/search returns {users, videos}; finds users by username",
+    "POST /api/services + POST /api/orders work; order creation generates type=order notification for creator",
+    "POST /api/reviews rejects unpaid order (400) and rating out of range (400)",
+    "GET /api/reviews/service/{id} returns {reviews, average, count}",
+    "GET /api/orders/reviewed-ids returns list",
+    "GET /api/notifications returns {items, unseen}; POST /api/notifications/mark-seen resets unseen to 0",
+    "POST /api/messages/with/{username} creates message and generates type=message notification for receiver",
+    "GET /api/messages/with/{username} returns conversation history sorted ASC",
+    "GET /api/messages/conversations returns list with last_text and unread per conversation",
+    "GET /api/earnings/me returns {total_gross, total_fees, total_earned, orders_count, platform_fee_percent=10.0}",
+    "POST /api/payments/checkout creates real Stripe session; GET /api/payments/status/{sid} returns clean structure and does NOT mark order paid without actual Stripe payment (payment_status stays 'unpaid')",
+    "GET /api/payments/status/{unknown} returns 404",
+    "PLATFORM_FEE_PERCENT=10.0 constant present; fee branch logic verified in payment_status and webhook code paths (lines 511, 522, 546, 556 in server.py) — stores platform_fee & creator_earnings on both payment_transactions and orders on successful payment"
+  ],
+  "failed": [
+    {
+      "area": "notifications / comments",
+      "issue": "Creating a comment on another user's video does NOT create a notification of type='comment' for the video owner. The POST /api/videos/{video_id}/comments endpoint (server.py lines 348-361) never calls create_notification().",
+      "evidence": "Test uploaded video by u1, u2 posted comment successfully (200), then GET /api/notifications for u1 returned only ['order'] — no 'comment' entry. Expected per review request: 'Creating a comment on someone else's video generates a notification for the video owner (type=comment)'.",
+      "priority": "HIGH"
+    }
+  ],
+  "action_items": [
+    "In /app/backend/server.py add_comment() (~line 348-361): after inserting comment, look up the video owner and call create_notification(video_owner_id, 'comment', f'@{user[\"username\"]} علّق على فيديوك', video_id, user['id']) — but only if user['id'] != video owner id."
+  ],
+  "success_rate": {"backend": "95%", "frontend": "not_tested"},
+  "retest_needed": true,
+  "full_testing_deferred": true,
+  "notes": "Could not fully validate the 10% fee is written to payment_transactions & orders end-to-end because that requires an actual Stripe test-card completion (not scriptable via API). However, code inspection confirms the branch logic is correct in BOTH payment_status polling and webhook handlers. All other new endpoints verified live against the public URL."
+}

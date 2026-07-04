@@ -310,6 +310,19 @@ export default function Feed() {
 
     return (
         <>
+            {/* Top bar */}
+            <div className="fixed top-0 inset-x-0 mx-auto max-w-md z-30 flex items-center justify-between p-4 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
+                <Link to="/search" data-testid="feed-search-btn" className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center pointer-events-auto hover:bg-black/70">
+                    <SearchIcon className="w-5 h-5 text-white" />
+                </Link>
+                <div className="font-heading font-black text-white text-lg pointer-events-none">
+                    <span className="text-[#E3FF00]">Creator</span> Hub
+                </div>
+                <Link to={user ? "/notifications" : "/auth"} data-testid="feed-notif-btn" className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center pointer-events-auto hover:bg-black/70">
+                    <Bell className="w-5 h-5 text-white" />
+                </Link>
+            </div>
+
             <div className="h-[100dvh] w-full overflow-y-scroll snap-y snap-mandatory bg-black feed-scroll" data-testid="feed-container">
                 {videos.map((v) => (
                     <VideoCard

@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import api, { API } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { Settings, Plus, Trash2, LogOut, Users, Film, Sparkles } from "lucide-react";
+import { Settings, Plus, Trash2, LogOut, Users, Film, Sparkles, MessageCircle, Wallet } from "lucide-react";
 
 export default function Profile() {
     const { username } = useParams();
@@ -15,6 +15,7 @@ export default function Profile() {
     const [tab, setTab] = useState("videos");
     const [showAdd, setShowAdd] = useState(false);
     const [svc, setSvc] = useState({ title: "", description: "", price: "", delivery_days: 3 });
+    const [earnings, setEarnings] = useState(null);
 
     const load = () => {
         api.get(`/users/${username}`).then((r) => setProfile(r.data));
@@ -23,6 +24,12 @@ export default function Profile() {
     };
 
     useEffect(() => { load(); }, [username]);
+
+    useEffect(() => {
+        if (me && profile && me.id === profile.id) {
+            api.get("/earnings/me").then((r) => setEarnings(r.data));
+        }
+    }, [me, profile]);
 
     const isMe = me && profile && me.id === profile.id;
 
@@ -66,6 +73,14 @@ export default function Profile() {
                     {isMe && (
                         <div className="flex gap-2">
                             <button
+                                onClick={() => navigate("/orders")}
+                                data-testid="orders-link-btn"
+                                className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 transition"
+                                title="طلباتي"
+                            >
+                                <Users className="w-5 h-5" />
+                            </button>
+                            <button
                                 onClick={() => navigate("/profile/edit")}
                                 data-testid="edit-profile-btn"
                                 className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 transition"
@@ -94,13 +109,47 @@ export default function Profile() {
                 </div>
 
                 {!isMe && (
-                    <button
-                        onClick={follow}
-                        data-testid="follow-btn"
-                        className={`w-full rounded-full py-3 font-heading font-bold transition ${profile.is_following ? "bg-white/10 text-white" : "bg-[#E3FF00] text-black hover:bg-[#CCEA00]"}`}
-                    >
-                        {profile.is_following ? "أتابعه" : "متابعة"}
-                    </button>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={follow}
+                            data-testid="follow-btn"
+                            className={`flex-1 rounded-full py-3 font-heading font-bold transition ${profile.is_following ? "bg-white/10 text-white" : "bg-[#E3FF00] text-black hover:bg-[#CCEA00]"}`}
+                        >
+                            {profile.is_following ? "أتابعه" : "متابعة"}
+                        </button>
+                        <button
+                            onClick={() => me ? navigate(`/messages/${profile.username}`) : navigate("/auth")}
+                            data-testid="message-btn"
+                            className="px-5 rounded-full py-3 font-heading font-bold bg-white/10 hover:bg-white/20 transition flex items-center gap-1"
+                        >
+                            <MessageCircle className="w-4 h-4" />
+                            رسالة
+                        </button>
+                    </div>
+                )}
+
+                {isMe && earnings && (
+                    <div className="mt-3 bg-gradient-to-br from-[#E3FF00]/10 to-transparent border border-[#E3FF00]/30 rounded-2xl p-4" data-testid="earnings-card">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Wallet className="w-4 h-4 text-[#E3FF00]" />
+                            <span className="text-xs text-neutral-400 font-heading font-bold">لوحة الأرباح</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                            <div>
+                                <div className="text-[#E3FF00] font-heading font-black text-lg">${earnings.total_earned}</div>
+                                <div className="text-[10px] text-neutral-500">صافي</div>
+                            </div>
+                            <div>
+                                <div className="text-white font-heading font-black text-lg">${earnings.total_gross}</div>
+                                <div className="text-[10px] text-neutral-500">إجمالي</div>
+                            </div>
+                            <div>
+                                <div className="text-neutral-400 font-heading font-black text-lg">{earnings.orders_count}</div>
+                                <div className="text-[10px] text-neutral-500">طلبات مدفوعة</div>
+                            </div>
+                        </div>
+                        <div className="text-[10px] text-neutral-500 mt-2 text-center">عمولة المنصة {earnings.platform_fee_percent}%</div>
+                    </div>
                 )}
             </div>
 

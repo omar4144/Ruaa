@@ -135,6 +135,30 @@ class CheckoutRequest(BaseModel):
     order_id: str
     origin_url: str
 
+class ReviewCreate(BaseModel):
+    order_id: str
+    rating: int  # 1-5
+    text: Optional[str] = ""
+
+class MessageCreate(BaseModel):
+    text: str
+
+PLATFORM_FEE_PERCENT = 10.0
+
+async def create_notification(user_id: str, type_: str, text: str, ref_id: str = "", from_user_id: str = ""):
+    if user_id == from_user_id:
+        return
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "type": type_,
+        "text": text,
+        "ref_id": ref_id,
+        "from_user_id": from_user_id,
+        "seen": False,
+        "created_at": now_iso(),
+    })
+
 
 # ==================== AUTH ====================
 @api_router.post("/auth/signup")
@@ -401,6 +425,8 @@ async def create_order(data: OrderCreate, user=Depends(current_user)):
     await db.orders.insert_one(doc)
     doc.pop("_id", None)
     doc["service"] = {k: v for k, v in service.items() if k != "_id"}
+    # Notify creator
+    await create_notification(service["user_id"], "order", f"@{user['username']} طلب خدمة: {service['title']}", order_id, user["id"])
     return doc
 
 @api_router.get("/orders/my")
@@ -416,6 +442,11 @@ async def my_orders(user=Depends(current_user)):
         o["creator"] = cr
     return {"as_client": as_client, "as_creator": as_creator}
 
+@api_router.get("/orders/reviewed-ids")
+async def reviewed_order_ids(user=Depends(current_user)):
+    reviews = await db.reviews.find({"client_id": user["id"]}, {"_id": 0, "order_id": 1}).to_list(1000)
+    return [r["order_id"] for r in reviews]
+
 @api_router.post("/orders/{order_id}/deliver")
 async def mark_delivered(order_id: str, user=Depends(current_user)):
     o = await db.orders.find_one({"id": order_id})
@@ -424,6 +455,7 @@ async def mark_delivered(order_id: str, user=Depends(current_user)):
     if o["payment_status"] != "paid":
         raise HTTPException(400, "لم يتم دفع الطلب بعد")
     await db.orders.update_one({"id": order_id}, {"$set": {"status": "delivered"}})
+    await create_notification(o["client_id"], "delivery", "تم تسليم طلبك ✓", order_id, user["id"])
     return {"ok": True}
 
 
@@ -475,14 +507,22 @@ async def payment_status(session_id: str, request: Request):
     status: CheckoutStatusResponse = await checkout.get_checkout_status(session_id)
     # Update if not already processed
     if tx["payment_status"] != "paid" and status.payment_status == "paid":
+        amount = float(tx["amount"])
+        platform_fee = round(amount * PLATFORM_FEE_PERCENT / 100.0, 2)
+        creator_earnings = round(amount - platform_fee, 2)
         await db.payment_transactions.update_one(
             {"session_id": session_id},
-            {"$set": {"payment_status": "paid", "status": status.status}}
+            {"$set": {"payment_status": "paid", "status": status.status,
+                      "platform_fee": platform_fee, "creator_earnings": creator_earnings}}
         )
+        order = await db.orders.find_one({"id": tx["order_id"]})
         await db.orders.update_one(
             {"id": tx["order_id"]},
-            {"$set": {"payment_status": "paid", "status": "paid"}}
+            {"$set": {"payment_status": "paid", "status": "paid",
+                      "platform_fee": platform_fee, "creator_earnings": creator_earnings}}
         )
+        if order:
+            await create_notification(order["creator_id"], "payment", f"تم دفع طلبك (+${creator_earnings})", order["id"], order["client_id"])
     else:
         await db.payment_transactions.update_one(
             {"session_id": session_id},
@@ -502,24 +542,186 @@ async def stripe_webhook(request: Request):
         if event.payment_status == "paid":
             tx = await db.payment_transactions.find_one({"session_id": event.session_id})
             if tx and tx["payment_status"] != "paid":
+                amount = float(tx["amount"])
+                platform_fee = round(amount * PLATFORM_FEE_PERCENT / 100.0, 2)
+                creator_earnings = round(amount - platform_fee, 2)
                 await db.payment_transactions.update_one(
                     {"session_id": event.session_id},
-                    {"$set": {"payment_status": "paid", "status": "complete"}}
+                    {"$set": {"payment_status": "paid", "status": "complete",
+                              "platform_fee": platform_fee, "creator_earnings": creator_earnings}}
                 )
                 await db.orders.update_one(
                     {"id": tx["order_id"]},
-                    {"$set": {"payment_status": "paid", "status": "paid"}}
+                    {"$set": {"payment_status": "paid", "status": "paid",
+                              "platform_fee": platform_fee, "creator_earnings": creator_earnings}}
                 )
     except Exception as e:
         logging.error(f"Webhook error: {e}")
     return {"ok": True}
 
 
-# ==================== EXPLORE ====================
+# ==================== EXPLORE / SEARCH ====================
 @api_router.get("/explore/creators")
 async def explore_creators(limit: int = 20):
     users = await db.users.find({}, {"_id": 0, "password": 0}).sort("followers", -1).to_list(limit)
     return users
+
+@api_router.get("/search")
+async def search(q: str = Query(..., min_length=1)):
+    users = await db.users.find(
+        {"$or": [
+            {"name": {"$regex": q, "$options": "i"}},
+            {"username": {"$regex": q, "$options": "i"}},
+        ]},
+        {"_id": 0, "password": 0}
+    ).limit(30).to_list(30)
+    videos = await db.videos.find(
+        {"is_deleted": False, "$or": [
+            {"caption": {"$regex": q, "$options": "i"}},
+            {"category": {"$regex": q, "$options": "i"}},
+        ]},
+        {"_id": 0}
+    ).sort("created_at", -1).limit(30).to_list(30)
+    for v in videos:
+        v["creator"] = await db.users.find_one({"id": v["user_id"]}, {"_id": 0, "password": 0})
+    return {"users": users, "videos": videos}
+
+
+# ==================== REVIEWS ====================
+@api_router.post("/reviews")
+async def create_review(data: ReviewCreate, user=Depends(current_user)):
+    if data.rating < 1 or data.rating > 5:
+        raise HTTPException(400, "التقييم من 1 إلى 5")
+    order = await db.orders.find_one({"id": data.order_id})
+    if not order or order["client_id"] != user["id"]:
+        raise HTTPException(404, "الطلب غير موجود")
+    if order["payment_status"] != "paid":
+        raise HTTPException(400, "لا يمكن تقييم طلب غير مدفوع")
+    if await db.reviews.find_one({"order_id": data.order_id}):
+        raise HTTPException(400, "تم تقييم هذا الطلب مسبقاً")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "order_id": data.order_id,
+        "service_id": order["service_id"],
+        "creator_id": order["creator_id"],
+        "client_id": user["id"],
+        "rating": data.rating,
+        "text": data.text,
+        "created_at": now_iso(),
+    }
+    await db.reviews.insert_one(doc)
+    doc.pop("_id", None)
+    await create_notification(order["creator_id"], "review", f"@{user['username']} قيّم خدمتك ({data.rating}★)", order["service_id"], user["id"])
+    return doc
+
+@api_router.get("/reviews/service/{service_id}")
+async def service_reviews(service_id: str):
+    reviews = await db.reviews.find({"service_id": service_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    for r in reviews:
+        r["client"] = await db.users.find_one({"id": r["client_id"]}, {"_id": 0, "password": 0})
+    avg = 0
+    if reviews:
+        avg = round(sum(r["rating"] for r in reviews) / len(reviews), 1)
+    return {"reviews": reviews, "average": avg, "count": len(reviews)}
+
+
+# ==================== NOTIFICATIONS ====================
+@api_router.get("/notifications")
+async def get_notifications(user=Depends(current_user)):
+    items = await db.notifications.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    for n in items:
+        if n.get("from_user_id"):
+            n["from_user"] = await db.users.find_one({"id": n["from_user_id"]}, {"_id": 0, "password": 0})
+    unseen = await db.notifications.count_documents({"user_id": user["id"], "seen": False})
+    return {"items": items, "unseen": unseen}
+
+@api_router.post("/notifications/mark-seen")
+async def mark_seen(user=Depends(current_user)):
+    await db.notifications.update_many({"user_id": user["id"], "seen": False}, {"$set": {"seen": True}})
+    return {"ok": True}
+
+
+# ==================== MESSAGES ====================
+def _conv_id(a: str, b: str) -> str:
+    return "_".join(sorted([a, b]))
+
+@api_router.get("/messages/conversations")
+async def conversations(user=Depends(current_user)):
+    # Get last message per conversation for this user
+    pipeline = [
+        {"$match": {"$or": [{"sender_id": user["id"]}, {"receiver_id": user["id"]}]}},
+        {"$sort": {"created_at": -1}},
+        {"$group": {"_id": "$conv_id", "last": {"$first": "$$ROOT"}}},
+        {"$sort": {"last.created_at": -1}},
+    ]
+    convs = await db.messages.aggregate(pipeline).to_list(200)
+    result = []
+    for c in convs:
+        last = c["last"]
+        other_id = last["receiver_id"] if last["sender_id"] == user["id"] else last["sender_id"]
+        other = await db.users.find_one({"id": other_id}, {"_id": 0, "password": 0})
+        unread = await db.messages.count_documents({
+            "conv_id": last["conv_id"], "receiver_id": user["id"], "seen": False
+        })
+        result.append({
+            "conv_id": last["conv_id"],
+            "user": other,
+            "last_text": last["text"],
+            "last_at": last["created_at"],
+            "unread": unread,
+        })
+    return result
+
+@api_router.get("/messages/with/{username}")
+async def messages_with(username: str, user=Depends(current_user)):
+    other = await db.users.find_one({"username": username}, {"_id": 0, "password": 0})
+    if not other:
+        raise HTTPException(404, "المستخدم غير موجود")
+    conv = _conv_id(user["id"], other["id"])
+    msgs = await db.messages.find({"conv_id": conv}, {"_id": 0}).sort("created_at", 1).to_list(500)
+    await db.messages.update_many(
+        {"conv_id": conv, "receiver_id": user["id"], "seen": False},
+        {"$set": {"seen": True}}
+    )
+    return {"user": other, "messages": msgs}
+
+@api_router.post("/messages/with/{username}")
+async def send_message(username: str, data: MessageCreate, user=Depends(current_user)):
+    other = await db.users.find_one({"username": username})
+    if not other:
+        raise HTTPException(404, "المستخدم غير موجود")
+    if other["id"] == user["id"]:
+        raise HTTPException(400, "لا يمكن مراسلة نفسك")
+    conv = _conv_id(user["id"], other["id"])
+    doc = {
+        "id": str(uuid.uuid4()),
+        "conv_id": conv,
+        "sender_id": user["id"],
+        "receiver_id": other["id"],
+        "text": data.text,
+        "seen": False,
+        "created_at": now_iso(),
+    }
+    await db.messages.insert_one(doc)
+    doc.pop("_id", None)
+    await create_notification(other["id"], "message", f"@{user['username']} أرسل لك رسالة", user["username"], user["id"])
+    return doc
+
+
+# ==================== EARNINGS ====================
+@api_router.get("/earnings/me")
+async def my_earnings(user=Depends(current_user)):
+    paid_orders = await db.orders.find({"creator_id": user["id"], "payment_status": "paid"}, {"_id": 0}).to_list(1000)
+    total_earned = sum(float(o.get("creator_earnings", 0)) for o in paid_orders)
+    total_gross = sum(float(o.get("amount", 0)) for o in paid_orders)
+    total_fees = sum(float(o.get("platform_fee", 0)) for o in paid_orders)
+    return {
+        "total_gross": round(total_gross, 2),
+        "total_fees": round(total_fees, 2),
+        "total_earned": round(total_earned, 2),
+        "orders_count": len(paid_orders),
+        "platform_fee_percent": PLATFORM_FEE_PERCENT,
+    }
 
 
 # ==================== APP SETUP ====================

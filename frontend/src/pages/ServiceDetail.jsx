@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { ChevronRight, Clock, DollarSign } from "lucide-react";
+import { ChevronRight, Clock, DollarSign, Star } from "lucide-react";
 
 export default function ServiceDetail() {
     const { id } = useParams();
@@ -12,9 +12,11 @@ export default function ServiceDetail() {
     const [service, setService] = useState(null);
     const [notes, setNotes] = useState("");
     const [loading, setLoading] = useState(false);
+    const [reviewsData, setReviewsData] = useState({ reviews: [], average: 0, count: 0 });
 
     useEffect(() => {
         api.get(`/services/${id}`).then((r) => setService(r.data));
+        api.get(`/reviews/service/${id}`).then((r) => setReviewsData(r.data));
     }, [id]);
 
     const order = async () => {
@@ -50,6 +52,17 @@ export default function ServiceDetail() {
             </Link>
 
             <h1 className="text-2xl font-heading font-black mb-3">{service.title}</h1>
+            {reviewsData.count > 0 && (
+                <div className="flex items-center gap-2 mb-3" data-testid="service-rating">
+                    <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((n) => (
+                            <Star key={n} className={`w-4 h-4 ${n <= Math.round(reviewsData.average) ? "text-[#E3FF00] fill-[#E3FF00]" : "text-neutral-700"}`} />
+                        ))}
+                    </div>
+                    <span className="text-sm text-white font-heading font-bold">{reviewsData.average}</span>
+                    <span className="text-xs text-neutral-500">({reviewsData.count} تقييم)</span>
+                </div>
+            )}
             <p className="text-neutral-300 leading-relaxed mb-6 whitespace-pre-line">{service.description}</p>
 
             <div className="grid grid-cols-2 gap-3 mb-6">
@@ -85,6 +98,32 @@ export default function ServiceDetail() {
             >
                 {loading ? "..." : `اطلب الآن بـ $${service.price}`}
             </button>
+
+            {reviewsData.reviews.length > 0 && (
+                <div className="mt-8">
+                    <h3 className="font-heading font-bold text-lg mb-3 flex items-center gap-2">
+                        <Star className="w-5 h-5 text-[#E3FF00]" /> التقييمات ({reviewsData.count})
+                    </h3>
+                    <div className="space-y-3">
+                        {reviewsData.reviews.map((r) => (
+                            <div key={r.id} className="bg-[#141414] border border-[#262626] rounded-2xl p-4" data-testid={`review-${r.id}`}>
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-full bg-[#E3FF00] flex items-center justify-center text-black text-xs font-heading font-black">{r.client?.name?.[0]}</div>
+                                        <div className="text-sm font-heading font-bold">@{r.client?.username}</div>
+                                    </div>
+                                    <div className="flex items-center gap-0.5">
+                                        {[1, 2, 3, 4, 5].map((n) => (
+                                            <Star key={n} className={`w-3 h-3 ${n <= r.rating ? "text-[#E3FF00] fill-[#E3FF00]" : "text-neutral-700"}`} />
+                                        ))}
+                                    </div>
+                                </div>
+                                {r.text && <p className="text-sm text-neutral-300">{r.text}</p>}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

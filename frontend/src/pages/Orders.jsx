@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "@/lib/api";
 import { toast } from "sonner";
-import { Package, CheckCircle2, Clock, DollarSign, User } from "lucide-react";
+import { Package, CheckCircle2, Clock, DollarSign, User, Star } from "lucide-react";
 
 const STATUS_LABELS = {
     pending_payment: { label: "بانتظار الدفع", color: "text-yellow-400", icon: Clock },
@@ -11,7 +11,36 @@ const STATUS_LABELS = {
     completed: { label: "مكتمل", color: "text-green-400", icon: CheckCircle2 },
 };
 
-const OrderCard = ({ o, isCreator, onDeliver, onPay }) => {
+const ReviewModal = ({ order, onClose, onSubmit }) => {
+    const [rating, setRating] = useState(5);
+    const [text, setText] = useState("");
+    return (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
+            <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-[#0A0A0A] border border-white/10 rounded-2xl p-6" data-testid="review-modal">
+                <h3 className="font-heading font-black text-xl mb-4">قيّم الخدمة</h3>
+                <div className="flex justify-center gap-2 mb-4">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                        <button key={n} data-testid={`star-${n}`} onClick={() => setRating(n)}>
+                            <Star className={`w-9 h-9 ${n <= rating ? "text-[#E3FF00] fill-[#E3FF00]" : "text-neutral-700"}`} />
+                        </button>
+                    ))}
+                </div>
+                <textarea
+                    data-testid="review-text"
+                    value={text} onChange={(e) => setText(e.target.value)}
+                    rows={3} placeholder="اكتب تعليقك..."
+                    className="w-full bg-[#141414] border border-[#262626] rounded-xl px-4 py-3 focus:border-[#E3FF00] focus:outline-none resize-none mb-4"
+                />
+                <div className="flex gap-2">
+                    <button onClick={onClose} className="flex-1 bg-white/10 rounded-full py-3 font-heading font-bold">إلغاء</button>
+                    <button data-testid="submit-review" onClick={() => onSubmit(rating, text)} className="flex-1 bg-[#E3FF00] text-black rounded-full py-3 font-heading font-bold">إرسال</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const OrderCard = ({ o, isCreator, onDeliver, onPay, onReview }) => {
     const s = STATUS_LABELS[o.status] || STATUS_LABELS.pending_payment;
     const Icon = s.icon;
     return (
@@ -40,6 +69,16 @@ const OrderCard = ({ o, isCreator, onDeliver, onPay }) => {
                     دفع ${o.amount}
                 </button>
             )}
+            {!isCreator && o.status === "delivered" && !o.reviewed && (
+                <button
+                    onClick={() => onReview(o)}
+                    data-testid={`review-btn-${o.id}`}
+                    className="w-full bg-white/10 hover:bg-white/20 text-white font-heading font-bold rounded-full py-2.5 transition mt-2 flex items-center justify-center gap-2"
+                >
+                    <Star className="w-4 h-4" />
+                    قيّم الخدمة
+                </button>
+            )}
             {isCreator && o.status === "paid" && (
                 <button
                     onClick={() => onDeliver(o.id)}
@@ -57,8 +96,16 @@ export default function Orders() {
     const [tab, setTab] = useState("as_client");
     const [data, setData] = useState({ as_client: [], as_creator: [] });
     const [params, setParams] = useSearchParams();
+    const [reviewOrder, setReviewOrder] = useState(null);
 
-    const load = () => api.get("/orders/my").then((r) => setData(r.data));
+    const load = async () => {
+        const r = await api.get("/orders/my");
+        // Merge reviewed flag
+        const reviews = await api.get("/orders/reviewed-ids").catch(() => ({ data: [] }));
+        const reviewedSet = new Set(reviews.data || []);
+        const mark = (arr) => arr.map((o) => ({ ...o, reviewed: reviewedSet.has(o.id) }));
+        setData({ as_client: mark(r.data.as_client), as_creator: mark(r.data.as_creator) });
+    };
 
     useEffect(() => {
         load();
@@ -114,6 +161,17 @@ export default function Orders() {
         }
     };
 
+    const submitReview = async (rating, text) => {
+        try {
+            await api.post("/reviews", { order_id: reviewOrder.id, rating, text });
+            toast.success("شكراً لتقييمك");
+            setReviewOrder(null);
+            load();
+        } catch (err) {
+            toast.error(err?.response?.data?.detail || "خطأ");
+        }
+    };
+
     const list = data[tab] || [];
 
     return (
@@ -144,8 +202,10 @@ export default function Orders() {
                 <div className="text-center py-16 text-neutral-500">لا توجد طلبات بعد</div>
             )}
             {list.map((o) => (
-                <OrderCard key={o.id} o={o} isCreator={tab === "as_creator"} onDeliver={deliver} onPay={pay} />
+                <OrderCard key={o.id} o={o} isCreator={tab === "as_creator"} onDeliver={deliver} onPay={pay} onReview={setReviewOrder} />
             ))}
+
+            {reviewOrder && <ReviewModal order={reviewOrder} onClose={() => setReviewOrder(null)} onSubmit={submitReview} />}
         </div>
     );
 }

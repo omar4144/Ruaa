@@ -12,6 +12,10 @@ import Explore from "@/pages/Explore";
 import Orders from "@/pages/Orders";
 import ServiceDetail from "@/pages/ServiceDetail";
 import EditProfile from "@/pages/EditProfile";
+import Search from "@/pages/Search";
+import Notifications from "@/pages/Notifications";
+import Messages from "@/pages/Messages";
+import Chat from "@/pages/Chat";
 
 const Protected = ({ children }) => {
     const { user, loading } = useAuth();
@@ -40,6 +44,10 @@ function App() {
                             <Route path="/profile/edit" element={<Protected><EditProfile /></Protected>} />
                             <Route path="/u/:username" element={<Profile />} />
                             <Route path="/service/:id" element={<ServiceDetail />} />
+                            <Route path="/search" element={<Search />} />
+                            <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
+                            <Route path="/messages" element={<Protected><Messages /></Protected>} />
+                            <Route path="/messages/:username" element={<Protected><Chat /></Protected>} />
                         </Route>
                         <Route path="/auth" element={<Auth />} />
                     </Routes>
