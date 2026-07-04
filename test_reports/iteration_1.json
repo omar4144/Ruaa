@@ -1,0 +1,29 @@
+{
+  "summary": "Backend smoke test iteration 1: all 23 backend endpoint checks passed against the public API URL. Auth, users, follow/unfollow, video upload (with Emergent Object Storage), feed, per-user videos, likes, comments, services CRUD, orders, Stripe checkout (real test URL returned), payment status, and explore creators are all working.",
+  "tested_scope": ["backend", "auth", "integration"],
+  "passed": [
+    "POST /api/auth/signup (new user + duplicate returns 400)",
+    "POST /api/auth/login (valid + wrong password returns 401)",
+    "GET /api/auth/me with Bearer token",
+    "GET /api/users/{username} (existing + unknown returns 404)",
+    "POST /api/users/{username}/follow (toggle increments/decrements followers field)",
+    "POST /api/videos/upload with multipart file (field name 'file', form field 'category') - stored via Emergent Object Storage, returns video with populated creator",
+    "GET /api/videos/feed returns list with creator + liked flag; newly uploaded video appears",
+    "GET /api/videos/user/{username} scoped to that user",
+    "POST /api/videos/{id}/like toggles liked state",
+    "POST + GET /api/videos/{id}/comments",
+    "POST /api/services, GET /api/services/user/{username}, DELETE /api/services/{id}",
+    "POST /api/orders creates order in pending_payment; GET /api/orders/my returns as_client/as_creator",
+    "POST /api/payments/checkout creates real Stripe test session (checkout.stripe.com URL)",
+    "GET /api/payments/status/{session_id} returns status/payment_status/amount/currency",
+    "GET /api/explore/creators returns list of users"
+  ],
+  "failed": [],
+  "action_items": [
+    "Note for main agent: video upload endpoint expects multipart field name 'file' (not 'video') and form field 'category' (not 'hashtags'). Confirm frontend Upload page uses these names.",
+    "Follow endpoint path is /api/users/{username}/follow (by username, not user id) and response is {\"following\": bool}. User model exposes 'followers' (not 'followers_count'). Confirm frontend consumes these keys."
+  ],
+  "success_rate": {"backend": "100%", "frontend": "not_tested"},
+  "retest_needed": false,
+  "full_testing_deferred": true
+}
