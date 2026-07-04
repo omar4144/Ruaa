@@ -1,0 +1,18 @@
+{
+  "summary": "Sprint 1 Ru'ya backend testing: role/looking_for on signup, JSON ProfileUpdate on PUT /users/me, and Marketplace project-requests + applications endpoints all working correctly. Sanity checks (login, feed) still pass.",
+  "tested_scope": ["backend", "auth", "integration"],
+  "passed": [
+    "POST /api/auth/signup accepts role='doctor' and looking_for=[...]; response contains role, looking_for, skills=[], years_experience=0, intro_video_url='', certifications=[], portfolio=[]",
+    "PUT /api/users/me now accepts JSON ProfileUpdate; persists name, bio, role, looking_for, skills, years_experience, intro_video_url, certifications (list of dicts), portfolio (list of dicts)",
+    "POST /api/project-requests creates request with id, user_id, title, description, category, budget_min, budget_max, deadline_days, status=open, applications_count=0",
+    "GET /api/project-requests returns list with populated user; ?category=design filter returns only matching items",
+    "GET /api/project-requests/{id} returns request with user + applications (with user) populated",
+    "POST /api/project-requests/{id}/apply: 400 when applying to own request, success for other user, increments applications_count to 1, creates 'application' notification for owner, 400 on duplicate apply",
+    "Sanity: /auth/login (200), /videos/feed (200) still working"
+  ],
+  "failed": [],
+  "action_items": [],
+  "success_rate": {"backend": "100%", "frontend": "not tested (backend-only request)"},
+  "retest_needed": false,
+  "full_testing_deferred": true
+}

@@ -99,8 +99,21 @@ export default function Profile() {
                 </div>
 
                 <h1 className="text-2xl font-heading font-black">{profile.name}</h1>
-                <div className="text-neutral-400 text-sm mb-3">@{profile.username}</div>
-                {profile.bio && <p className="text-white/90 mb-4 leading-relaxed">{profile.bio}</p>}
+                <div className="text-neutral-400 text-sm mb-2">@{profile.username}</div>
+                {profile.role && (
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <span className="text-xs bg-[#E3FF00]/20 text-[#E3FF00] px-2 py-0.5 rounded-full font-heading font-bold">{profile.role}</span>
+                        {profile.years_experience > 0 && <span className="text-xs text-neutral-500">{profile.years_experience} سنة خبرة</span>}
+                    </div>
+                )}
+                {profile.bio && <p className="text-white/90 mb-3 leading-relaxed">{profile.bio}</p>}
+                {profile.skills?.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-4">
+                        {profile.skills.map((s) => (
+                            <span key={s} className="text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded-full">{s}</span>
+                        ))}
+                    </div>
+                )}
 
                 <div className="flex gap-6 mb-4">
                     <div><span className="font-heading font-bold text-white">{profile.followers || 0}</span> <span className="text-neutral-500 text-sm">متابع</span></div>

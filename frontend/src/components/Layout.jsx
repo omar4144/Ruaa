@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Home, Compass, PlusSquare, MessageCircle, User } from "lucide-react";
+import { Home, Compass, PlusSquare, Briefcase, User } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 const NavItem = ({ to, icon: Icon, label, testId }) => (
@@ -40,9 +40,9 @@ export default function Layout() {
                 className="fixed bottom-0 inset-x-0 mx-auto max-w-md bg-black/95 backdrop-blur-xl border-t border-white/10 flex justify-around items-center h-16 z-50"
             >
                 <NavItem to="/" icon={Home} label="الرئيسية" testId="nav-home" />
-                <NavItem to="/explore" icon={Compass} label="اكتشف" testId="nav-explore" />
+                <NavItem to="/marketplace" icon={Briefcase} label="السوق" testId="nav-marketplace" />
                 <NavItem to="/upload" icon={PlusSquare} label="نشر" testId="nav-upload" />
-                <NavItem to="/messages" icon={MessageCircle} label="رسائل" testId="nav-messages" />
+                <NavItem to="/explore" icon={Compass} label="اكتشف" testId="nav-explore" />
                 <button
                     data-testid="nav-profile"
                     onClick={goProfile}

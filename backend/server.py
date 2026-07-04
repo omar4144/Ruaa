@@ -113,10 +113,35 @@ class SignupRequest(BaseModel):
     password: str
     name: str
     username: str
+    role: Optional[str] = "creator"
+    looking_for: Optional[List[str]] = []
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+class ProfileUpdate(BaseModel):
+    name: str
+    bio: Optional[str] = ""
+    role: Optional[str] = None
+    looking_for: Optional[List[str]] = None
+    skills: Optional[List[str]] = None
+    years_experience: Optional[int] = None
+    intro_video_url: Optional[str] = None
+    certifications: Optional[List[Dict]] = None
+    portfolio: Optional[List[Dict]] = None
+
+class ProjectRequestCreate(BaseModel):
+    title: str
+    description: str
+    category: str
+    budget_min: Optional[float] = 0
+    budget_max: Optional[float] = 0
+    deadline_days: Optional[int] = 7
+
+class ApplicationCreate(BaseModel):
+    message: str
+    proposed_price: Optional[float] = 0
 
 class ServiceCreate(BaseModel):
     title: str
@@ -176,6 +201,13 @@ async def signup(data: SignupRequest):
         "password": hash_password(data.password),
         "bio": "",
         "avatar_url": "",
+        "role": data.role or "creator",
+        "looking_for": data.looking_for or [],
+        "skills": [],
+        "years_experience": 0,
+        "intro_video_url": "",
+        "certifications": [],
+        "portfolio": [],
         "is_creator": True,
         "followers": 0,
         "following": 0,
@@ -215,8 +247,13 @@ async def get_user(username: str, viewer=Depends(optional_user)):
     return user
 
 @api_router.put("/users/me")
-async def update_me(bio: str = Form(""), name: str = Form(...), user=Depends(current_user)):
-    await db.users.update_one({"id": user["id"]}, {"$set": {"bio": bio, "name": name}})
+async def update_me(data: ProfileUpdate, user=Depends(current_user)):
+    update = {"name": data.name, "bio": data.bio or ""}
+    for f in ["role", "looking_for", "skills", "years_experience", "intro_video_url", "certifications", "portfolio"]:
+        val = getattr(data, f)
+        if val is not None:
+            update[f] = val
+    await db.users.update_one({"id": user["id"]}, {"$set": update})
     updated = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password": 0})
     return updated
 
@@ -725,6 +762,73 @@ async def my_earnings(user=Depends(current_user)):
         "orders_count": len(paid_orders),
         "platform_fee_percent": PLATFORM_FEE_PERCENT,
     }
+
+
+# ==================== MARKETPLACE (PROJECT REQUESTS) ====================
+@api_router.post("/project-requests")
+async def create_project_request(data: ProjectRequestCreate, user=Depends(current_user)):
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "title": data.title,
+        "description": data.description,
+        "category": data.category,
+        "budget_min": float(data.budget_min or 0),
+        "budget_max": float(data.budget_max or 0),
+        "deadline_days": int(data.deadline_days or 7),
+        "status": "open",
+        "applications_count": 0,
+        "created_at": now_iso(),
+    }
+    await db.project_requests.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.get("/project-requests")
+async def list_project_requests(category: Optional[str] = None):
+    q = {"status": "open"}
+    if category:
+        q["category"] = category
+    items = await db.project_requests.find(q, {"_id": 0}).sort("created_at", -1).to_list(100)
+    for it in items:
+        it["user"] = await db.users.find_one({"id": it["user_id"]}, {"_id": 0, "password": 0})
+    return items
+
+@api_router.get("/project-requests/{req_id}")
+async def get_project_request(req_id: str):
+    it = await db.project_requests.find_one({"id": req_id}, {"_id": 0})
+    if not it:
+        raise HTTPException(404, "الطلب غير موجود")
+    it["user"] = await db.users.find_one({"id": it["user_id"]}, {"_id": 0, "password": 0})
+    apps = await db.applications.find({"project_id": req_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    for a in apps:
+        a["user"] = await db.users.find_one({"id": a["user_id"]}, {"_id": 0, "password": 0})
+    it["applications"] = apps
+    return it
+
+@api_router.post("/project-requests/{req_id}/apply")
+async def apply_to_request(req_id: str, data: ApplicationCreate, user=Depends(current_user)):
+    req = await db.project_requests.find_one({"id": req_id})
+    if not req:
+        raise HTTPException(404, "الطلب غير موجود")
+    if req["user_id"] == user["id"]:
+        raise HTTPException(400, "لا يمكنك التقديم لطلبك")
+    existing = await db.applications.find_one({"project_id": req_id, "user_id": user["id"]})
+    if existing:
+        raise HTTPException(400, "قدمت مسبقاً على هذا الطلب")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "project_id": req_id,
+        "user_id": user["id"],
+        "message": data.message,
+        "proposed_price": float(data.proposed_price or 0),
+        "created_at": now_iso(),
+    }
+    await db.applications.insert_one(doc)
+    await db.project_requests.update_one({"id": req_id}, {"$inc": {"applications_count": 1}})
+    await create_notification(req["user_id"], "application", f"@{user['username']} قدّم على مشروعك: {req['title']}", req_id, user["id"])
+    doc.pop("_id", None)
+    return doc
 
 
 # ==================== APP SETUP ====================

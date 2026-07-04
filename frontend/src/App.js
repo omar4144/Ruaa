@@ -16,6 +16,8 @@ import Search from "@/pages/Search";
 import Notifications from "@/pages/Notifications";
 import Messages from "@/pages/Messages";
 import Chat from "@/pages/Chat";
+import Marketplace from "@/pages/Marketplace";
+import MarketplaceDetail from "@/pages/MarketplaceDetail";
 
 const Protected = ({ children }) => {
     const { user, loading } = useAuth();
@@ -48,6 +50,8 @@ function App() {
                             <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
                             <Route path="/messages" element={<Protected><Messages /></Protected>} />
                             <Route path="/messages/:username" element={<Protected><Chat /></Protected>} />
+                            <Route path="/marketplace" element={<Marketplace />} />
+                            <Route path="/marketplace/:id" element={<MarketplaceDetail />} />
                         </Route>
                         <Route path="/auth" element={<Auth />} />
                     </Routes>
