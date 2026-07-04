@@ -1,56 +1,52 @@
-import { useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { Toaster } from "sonner";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
-import { HOME } from "@/constants/testIds";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+import Layout from "@/components/Layout";
+import Feed from "@/pages/Feed";
+import Auth from "@/pages/Auth";
+import Upload from "@/pages/Upload";
+import Profile from "@/pages/Profile";
+import Explore from "@/pages/Explore";
+import Orders from "@/pages/Orders";
+import ServiceDetail from "@/pages/ServiceDetail";
+import EditProfile from "@/pages/EditProfile";
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
-
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
-
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          data-testid={HOME.emergentLink}
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
+const Protected = ({ children }) => {
+    const { user, loading } = useAuth();
+    if (loading)
+        return (
+            <div className="min-h-screen bg-black flex items-center justify-center text-white">
+                جارٍ التحميل...
+            </div>
+        );
+    if (!user) return <Navigate to="/auth" replace />;
+    return children;
 };
 
 function App() {
-  return (
-    <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </div>
-  );
+    return (
+        <div className="App">
+            <BrowserRouter>
+                <AuthProvider>
+                    <Toaster position="top-center" theme="dark" richColors />
+                    <Routes>
+                        <Route element={<Layout />}>
+                            <Route path="/" element={<Feed />} />
+                            <Route path="/explore" element={<Explore />} />
+                            <Route path="/upload" element={<Protected><Upload /></Protected>} />
+                            <Route path="/orders" element={<Protected><Orders /></Protected>} />
+                            <Route path="/profile/edit" element={<Protected><EditProfile /></Protected>} />
+                            <Route path="/u/:username" element={<Profile />} />
+                            <Route path="/service/:id" element={<ServiceDetail />} />
+                        </Route>
+                        <Route path="/auth" element={<Auth />} />
+                    </Routes>
+                </AuthProvider>
+            </BrowserRouter>
+        </div>
+    );
 }
 
 export default App;

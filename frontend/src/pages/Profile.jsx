@@ -1,0 +1,191 @@
+import { useEffect, useState } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import api, { API } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import { toast } from "sonner";
+import { Settings, Plus, Trash2, LogOut, Users, Film, Sparkles } from "lucide-react";
+
+export default function Profile() {
+    const { username } = useParams();
+    const { user: me, logout } = useAuth();
+    const navigate = useNavigate();
+    const [profile, setProfile] = useState(null);
+    const [videos, setVideos] = useState([]);
+    const [services, setServices] = useState([]);
+    const [tab, setTab] = useState("videos");
+    const [showAdd, setShowAdd] = useState(false);
+    const [svc, setSvc] = useState({ title: "", description: "", price: "", delivery_days: 3 });
+
+    const load = () => {
+        api.get(`/users/${username}`).then((r) => setProfile(r.data));
+        api.get(`/videos/user/${username}`).then((r) => setVideos(r.data));
+        api.get(`/services/user/${username}`).then((r) => setServices(r.data));
+    };
+
+    useEffect(() => { load(); }, [username]);
+
+    const isMe = me && profile && me.id === profile.id;
+
+    const follow = async () => {
+        if (!me) return navigate("/auth");
+        try {
+            const res = await api.post(`/users/${username}/follow`);
+            setProfile({ ...profile, is_following: res.data.following, followers: profile.followers + (res.data.following ? 1 : -1) });
+        } catch {}
+    };
+
+    const addService = async (e) => {
+        e.preventDefault();
+        try {
+            await api.post("/services", { ...svc, price: parseFloat(svc.price), delivery_days: parseInt(svc.delivery_days) });
+            toast.success("تمت إضافة الخدمة");
+            setShowAdd(false);
+            setSvc({ title: "", description: "", price: "", delivery_days: 3 });
+            load();
+        } catch {
+            toast.error("خطأ في إضافة الخدمة");
+        }
+    };
+
+    const removeSvc = async (id) => {
+        if (!window.confirm("حذف الخدمة؟")) return;
+        await api.delete(`/services/${id}`);
+        load();
+    };
+
+    if (!profile) return <div className="p-8 text-center text-neutral-500">جارٍ التحميل...</div>;
+
+    return (
+        <div className="pb-24 font-body" data-testid="profile-page">
+            {/* Header */}
+            <div className="relative bg-gradient-to-b from-[#141414] to-black pt-8 pb-6 px-6">
+                <div className="flex items-start justify-between mb-4">
+                    <div className="w-24 h-24 rounded-full bg-[#E3FF00] flex items-center justify-center text-black text-3xl font-heading font-black">
+                        {profile.name?.[0] || "?"}
+                    </div>
+                    {isMe && (
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => navigate("/profile/edit")}
+                                data-testid="edit-profile-btn"
+                                className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 transition"
+                            >
+                                <Settings className="w-5 h-5" />
+                            </button>
+                            <button
+                                onClick={() => { logout(); navigate("/"); }}
+                                data-testid="logout-btn"
+                                className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 transition"
+                            >
+                                <LogOut className="w-5 h-5" />
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                <h1 className="text-2xl font-heading font-black">{profile.name}</h1>
+                <div className="text-neutral-400 text-sm mb-3">@{profile.username}</div>
+                {profile.bio && <p className="text-white/90 mb-4 leading-relaxed">{profile.bio}</p>}
+
+                <div className="flex gap-6 mb-4">
+                    <div><span className="font-heading font-bold text-white">{profile.followers || 0}</span> <span className="text-neutral-500 text-sm">متابع</span></div>
+                    <div><span className="font-heading font-bold text-white">{profile.following || 0}</span> <span className="text-neutral-500 text-sm">يتابع</span></div>
+                    <div><span className="font-heading font-bold text-white">{videos.length}</span> <span className="text-neutral-500 text-sm">فيديو</span></div>
+                </div>
+
+                {!isMe && (
+                    <button
+                        onClick={follow}
+                        data-testid="follow-btn"
+                        className={`w-full rounded-full py-3 font-heading font-bold transition ${profile.is_following ? "bg-white/10 text-white" : "bg-[#E3FF00] text-black hover:bg-[#CCEA00]"}`}
+                    >
+                        {profile.is_following ? "أتابعه" : "متابعة"}
+                    </button>
+                )}
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b border-white/10 px-6 gap-6">
+                {[["videos", "الفيديوهات", Film], ["services", "الخدمات", Sparkles]].map(([k, label, Icon]) => (
+                    <button
+                        key={k}
+                        data-testid={`tab-${k}`}
+                        onClick={() => setTab(k)}
+                        className={`flex items-center gap-2 py-3 border-b-2 transition font-heading font-bold text-sm ${tab === k ? "border-[#E3FF00] text-[#E3FF00]" : "border-transparent text-neutral-500"}`}
+                    >
+                        <Icon className="w-4 h-4" />
+                        {label}
+                    </button>
+                ))}
+            </div>
+
+            <div className="p-4">
+                {tab === "videos" && (
+                    <div className="grid grid-cols-3 gap-1">
+                        {videos.length === 0 && <div className="col-span-3 py-16 text-center text-neutral-500">لا يوجد فيديوهات</div>}
+                        {videos.map((v) => (
+                            <div key={v.id} className="aspect-[9/16] bg-neutral-900 rounded-md overflow-hidden relative" data-testid={`profile-video-${v.id}`}>
+                                <video src={`${API}/videos/stream/${v.id}`} className="w-full h-full object-cover" muted preload="metadata" />
+                                <div className="absolute bottom-1 start-1 text-xs bg-black/60 px-1.5 py-0.5 rounded text-white">{v.likes || 0} ♥</div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {tab === "services" && (
+                    <div className="space-y-3">
+                        {isMe && (
+                            <button
+                                onClick={() => setShowAdd(true)}
+                                data-testid="add-service-btn"
+                                className="w-full bg-[#141414] border-2 border-dashed border-[#333] hover:border-[#E3FF00] rounded-2xl py-6 flex flex-col items-center gap-1 transition"
+                            >
+                                <Plus className="w-6 h-6 text-[#E3FF00]" />
+                                <div className="font-heading font-bold text-sm">إضافة خدمة</div>
+                            </button>
+                        )}
+                        {services.length === 0 && !isMe && <div className="py-16 text-center text-neutral-500">لا توجد خدمات</div>}
+                        {services.map((s) => (
+                            <div key={s.id} className="bg-[#141414] border border-[#262626] rounded-2xl p-4" data-testid={`service-card-${s.id}`}>
+                                <div className="flex items-start justify-between gap-3">
+                                    <Link to={`/service/${s.id}`} className="flex-1">
+                                        <h4 className="font-heading font-bold mb-1">{s.title}</h4>
+                                        <p className="text-sm text-neutral-400 line-clamp-2">{s.description}</p>
+                                        <div className="text-xs text-neutral-500 mt-2">تسليم {s.delivery_days} أيام</div>
+                                    </Link>
+                                    <div className="text-end">
+                                        <div className="text-[#E3FF00] font-heading font-black text-xl">${s.price}</div>
+                                        {isMe && (
+                                            <button onClick={() => removeSvc(s.id)} data-testid={`delete-service-${s.id}`} className="text-neutral-500 mt-2">
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Add Service Modal */}
+            {showAdd && (
+                <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setShowAdd(false)}>
+                    <form onSubmit={addService} onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-[#0A0A0A] border border-white/10 rounded-2xl p-6 space-y-4" data-testid="add-service-modal">
+                        <h3 className="font-heading font-black text-xl">إضافة خدمة جديدة</h3>
+                        <input required placeholder="عنوان الخدمة" data-testid="svc-title" value={svc.title} onChange={(e) => setSvc({ ...svc, title: e.target.value })} className="w-full bg-[#141414] border border-[#262626] rounded-xl px-4 py-3 focus:border-[#E3FF00] focus:outline-none" />
+                        <textarea required placeholder="وصف الخدمة" data-testid="svc-desc" value={svc.description} onChange={(e) => setSvc({ ...svc, description: e.target.value })} rows={3} className="w-full bg-[#141414] border border-[#262626] rounded-xl px-4 py-3 focus:border-[#E3FF00] focus:outline-none resize-none" />
+                        <div className="grid grid-cols-2 gap-3">
+                            <input required type="number" min="1" step="0.01" placeholder="السعر (USD)" data-testid="svc-price" value={svc.price} onChange={(e) => setSvc({ ...svc, price: e.target.value })} className="bg-[#141414] border border-[#262626] rounded-xl px-4 py-3 focus:border-[#E3FF00] focus:outline-none" />
+                            <input required type="number" min="1" placeholder="مدة التسليم (يوم)" data-testid="svc-delivery" value={svc.delivery_days} onChange={(e) => setSvc({ ...svc, delivery_days: e.target.value })} className="bg-[#141414] border border-[#262626] rounded-xl px-4 py-3 focus:border-[#E3FF00] focus:outline-none" />
+                        </div>
+                        <div className="flex gap-2">
+                            <button type="button" onClick={() => setShowAdd(false)} className="flex-1 bg-white/10 rounded-full py-3 font-heading font-bold">إلغاء</button>
+                            <button type="submit" data-testid="submit-service" className="flex-1 bg-[#E3FF00] text-black rounded-full py-3 font-heading font-bold">إضافة</button>
+                        </div>
+                    </form>
+                </div>
+            )}
+        </div>
+    );
+}
