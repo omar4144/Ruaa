@@ -1,9 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { WorkspaceProvider } from "@/context/WorkspaceContext";
 import { Toaster } from "sonner";
 import "@/App.css";
 
 import Layout from "@/components/Layout";
+import BusinessLayout from "@/components/BusinessLayout";
 import Feed from "@/pages/Feed";
 import Auth from "@/pages/Auth";
 import Upload from "@/pages/Upload";
@@ -26,6 +28,13 @@ import Incubator from "@/pages/Incubator";
 import AIAssistant from "@/pages/AIAssistant";
 import Events from "@/pages/Events";
 
+// Business OS pages
+import Dashboard from "@/pages/business/Dashboard";
+import Contacts from "@/pages/business/Contacts";
+import Pipeline from "@/pages/business/Pipeline";
+import Invoices from "@/pages/business/Invoices";
+import WorkspaceSettings from "@/pages/business/WorkspaceSettings";
+
 const Protected = ({ children }) => {
     const { user, loading } = useAuth();
     if (loading)
@@ -43,32 +52,51 @@ function App() {
         <div className="App">
             <BrowserRouter>
                 <AuthProvider>
-                    <Toaster position="top-center" theme="dark" richColors />
-                    <Routes>
-                        <Route element={<Layout />}>
-                            <Route path="/" element={<Feed />} />
-                            <Route path="/explore" element={<Explore />} />
-                            <Route path="/upload" element={<Protected><Upload /></Protected>} />
-                            <Route path="/orders" element={<Protected><Orders /></Protected>} />
-                            <Route path="/profile/edit" element={<Protected><EditProfile /></Protected>} />
-                            <Route path="/u/:username" element={<Profile />} />
-                            <Route path="/service/:id" element={<ServiceDetail />} />
-                            <Route path="/search" element={<Search />} />
-                            <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
-                            <Route path="/messages" element={<Protected><Messages /></Protected>} />
-                            <Route path="/messages/:username" element={<Protected><Chat /></Protected>} />
-                            <Route path="/marketplace" element={<Marketplace />} />
-                            <Route path="/marketplace/:id" element={<MarketplaceDetail />} />
-                            <Route path="/communities" element={<Communities />} />
-                            <Route path="/communities/:slug" element={<CommunityDetail />} />
-                            <Route path="/teams" element={<Teams />} />
-                            <Route path="/teams/:id" element={<TeamDetail />} />
-                            <Route path="/incubator" element={<Protected><Incubator /></Protected>} />
-                            <Route path="/ai" element={<Protected><AIAssistant /></Protected>} />
-                            <Route path="/events" element={<Events />} />
-                        </Route>
-                        <Route path="/auth" element={<Auth />} />
-                    </Routes>
+                    <WorkspaceProvider>
+                        <Toaster position="top-center" theme="dark" richColors />
+                        <Routes>
+                            {/* Business OS (desktop-first) */}
+                            <Route
+                                path="/business"
+                                element={
+                                    <Protected>
+                                        <BusinessLayout />
+                                    </Protected>
+                                }
+                            >
+                                <Route index element={<Dashboard />} />
+                                <Route path="contacts" element={<Contacts />} />
+                                <Route path="pipeline" element={<Pipeline />} />
+                                <Route path="invoices" element={<Invoices />} />
+                                <Route path="settings" element={<WorkspaceSettings />} />
+                            </Route>
+
+                            {/* Existing consumer/mobile app */}
+                            <Route element={<Layout />}>
+                                <Route path="/" element={<Feed />} />
+                                <Route path="/explore" element={<Explore />} />
+                                <Route path="/upload" element={<Protected><Upload /></Protected>} />
+                                <Route path="/orders" element={<Protected><Orders /></Protected>} />
+                                <Route path="/profile/edit" element={<Protected><EditProfile /></Protected>} />
+                                <Route path="/u/:username" element={<Profile />} />
+                                <Route path="/service/:id" element={<ServiceDetail />} />
+                                <Route path="/search" element={<Search />} />
+                                <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
+                                <Route path="/messages" element={<Protected><Messages /></Protected>} />
+                                <Route path="/messages/:username" element={<Protected><Chat /></Protected>} />
+                                <Route path="/marketplace" element={<Marketplace />} />
+                                <Route path="/marketplace/:id" element={<MarketplaceDetail />} />
+                                <Route path="/communities" element={<Communities />} />
+                                <Route path="/communities/:slug" element={<CommunityDetail />} />
+                                <Route path="/teams" element={<Teams />} />
+                                <Route path="/teams/:id" element={<TeamDetail />} />
+                                <Route path="/incubator" element={<Protected><Incubator /></Protected>} />
+                                <Route path="/ai" element={<Protected><AIAssistant /></Protected>} />
+                                <Route path="/events" element={<Events />} />
+                            </Route>
+                            <Route path="/auth" element={<Auth />} />
+                        </Routes>
+                    </WorkspaceProvider>
                 </AuthProvider>
             </BrowserRouter>
         </div>
