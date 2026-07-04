@@ -97,6 +97,32 @@ function App() {
                             <Route path="/auth" element={<Auth />} />
                         </Routes>
                     </WorkspaceProvider>
+                    <Toaster position="top-center" theme="dark" richColors />
+                    <Routes>
+                        <Route element={<Layout />}>
+                            <Route path="/" element={<Feed />} />
+                            <Route path="/explore" element={<Explore />} />
+                            <Route path="/upload" element={<Protected><Upload /></Protected>} />
+                            <Route path="/orders" element={<Protected><Orders /></Protected>} />
+                            <Route path="/profile/edit" element={<Protected><EditProfile /></Protected>} />
+                            <Route path="/u/:username" element={<Profile />} />
+                            <Route path="/service/:id" element={<ServiceDetail />} />
+                            <Route path="/search" element={<Search />} />
+                            <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
+                            <Route path="/messages" element={<Protected><Messages /></Protected>} />
+                            <Route path="/messages/:username" element={<Protected><Chat /></Protected>} />
+                            <Route path="/marketplace" element={<Marketplace />} />
+                            <Route path="/marketplace/:id" element={<MarketplaceDetail />} />
+                            <Route path="/communities" element={<Communities />} />
+                            <Route path="/communities/:slug" element={<CommunityDetail />} />
+                            <Route path="/teams" element={<Teams />} />
+                            <Route path="/teams/:id" element={<TeamDetail />} />
+                            <Route path="/incubator" element={<Protected><Incubator /></Protected>} />
+                            <Route path="/ai" element={<Protected><AIAssistant /></Protected>} />
+                            <Route path="/events" element={<Events />} />
+                        </Route>
+                        <Route path="/auth" element={<Auth />} />
+                    </Routes>
                 </AuthProvider>
             </BrowserRouter>
         </div>
