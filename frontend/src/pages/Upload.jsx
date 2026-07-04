@@ -31,7 +31,7 @@ export default function Upload() {
 
     const submit = async (e) => {
         e.preventDefault();
-        if (!file) return toast.error("اختر فيديو");
+        if (!file) return toast.error("اختر فيديو أولاً");
         setLoading(true);
         const fd = new FormData();
         fd.append("file", file);
@@ -40,11 +40,20 @@ export default function Upload() {
         try {
             await api.post("/videos/upload", fd, {
                 headers: { "Content-Type": "multipart/form-data" },
+                timeout: 300000,
+                onUploadProgress: (evt) => {
+                    if (evt.total) {
+                        const p = Math.round((evt.loaded * 100) / evt.total);
+                        toast.loading(`جارٍ الرفع... ${p}%`, { id: "upload" });
+                    }
+                },
             });
-            toast.success("تم النشر بنجاح");
+            toast.success("تم النشر بنجاح", { id: "upload" });
             navigate("/");
         } catch (err) {
-            toast.error(err?.response?.data?.detail || "خطأ في الرفع");
+            const msg = err?.response?.data?.detail || err?.message || "خطأ في الرفع";
+            toast.error(msg, { id: "upload" });
+            console.error("Upload error:", err);
         } finally {
             setLoading(false);
         }
@@ -57,16 +66,15 @@ export default function Upload() {
 
             <form onSubmit={submit} className="flex flex-col gap-5">
                 {!preview ? (
-                    <button
-                        type="button"
-                        onClick={() => inputRef.current?.click()}
+                    <label
+                        htmlFor="video-file-input"
                         data-testid="pick-video-btn"
-                        className="bg-[#141414] border-2 border-dashed border-[#333] rounded-2xl p-10 flex flex-col items-center gap-3 hover:border-[#E3FF00] transition"
+                        className="bg-[#141414] border-2 border-dashed border-[#333] rounded-2xl p-10 flex flex-col items-center gap-3 hover:border-[#E3FF00] transition cursor-pointer"
                     >
                         <UploadCloud className="w-12 h-12 text-[#E3FF00]" />
                         <div className="font-heading font-bold">اضغط لاختيار فيديو</div>
                         <div className="text-xs text-neutral-500">MP4، MOV — حتى 100MB</div>
-                    </button>
+                    </label>
                 ) : (
                     <div className="relative rounded-2xl overflow-hidden bg-black aspect-[9/16] max-h-[400px]">
                         <video src={preview} className="w-full h-full object-contain" controls />
@@ -81,9 +89,10 @@ export default function Upload() {
                     </div>
                 )}
                 <input
+                    id="video-file-input"
                     ref={inputRef}
                     type="file"
-                    accept="video/*"
+                    accept="video/mp4,video/quicktime,video/webm,video/*"
                     className="hidden"
                     onChange={(e) => onFile(e.target.files?.[0])}
                     data-testid="file-input"
