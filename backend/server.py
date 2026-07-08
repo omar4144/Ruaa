@@ -17,6 +17,7 @@ from datetime import datetime, timezone, timedelta
 from emergentintegrations.payments.stripe.checkout import (
     StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
 )
+from modules import business_os
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -267,6 +268,11 @@ async def signup(data: SignupRequest):
         "created_at": now_iso(),
     }
     await db.users.insert_one(doc)
+    # Auto-create personal workspace for new user
+    try:
+        await business_os.ensure_personal_workspace(doc)
+    except Exception as e:
+        logging.error(f"personal workspace creation failed for {doc['id']}: {e}")
     token = create_token(user_id)
     doc.pop("_id", None)
     return {"token": token, "user": {k: v for k, v in doc.items() if k != "password"}}
@@ -1204,6 +1210,8 @@ async def my_courses(user=Depends(current_user)):
 
 # ==================== APP SETUP ====================
 app.include_router(api_router)
+app.include_router(business_os.router)
+business_os.bind_db(db)
 
 app.add_middleware(
     CORSMiddleware,
@@ -1234,6 +1242,11 @@ async def startup():
         logger.info("Communities seeded")
     except Exception as e:
         logger.error(f"Community seed failed: {e}")
+    # Business OS: personal workspaces for existing users
+    try:
+        await business_os.migrate_existing_users()
+    except Exception as e:
+        logger.error(f"Business OS migration failed: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
